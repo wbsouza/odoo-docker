@@ -19,65 +19,55 @@ ODOO_PORT="8069"
 ODOO_VERSION="11.0"
 
 
-PG_VERSION="${POSTGRES_VERSION:-10}"
+PG_VERSION="${POSTGRES_VERSION:-12}"
 
 
+export APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE=DontWarn
 export DEBIAN_FRONTEND=noninteractive
 echo 'debconf debconf/frontend select Dialog' | debconf-set-selections
+
+
 
 #--------------------------------------------------
 # Install the minimal tools
 #--------------------------------------------------
 apt-get -y update
-apt-get upgrade -y
-apt-get -y install gnupg2 gcc g++ make curl wget git bzr apt-utils locales libmaxminddb0 libmaxminddb-dev libgeoip-dev
-
-echo "en_US.UTF-8 UTF-8" > /etc/locale.gen
-
-echo "LC_ALL=en_US.UTF-8" >> /etc/environment
-echo "LANG=en_US.UTF-8" >> /etc/environment
-echo "LANGUAGE=en_US.UTF-8" >> /etc/environment
-echo "LOCALE=en_US.UTF-8" >> /etc/environment
-
-echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen
-echo "LANG=en_US.UTF-8" > /etc/locale.conf
-locale-gen en_US.UTF-8
+apt-get -y install apt-utils gnupg2 curl locales
 
 rm -fR /etc/localtime
 ln -s /usr/share/zoneinfo/America/Vancouver  /etc/localtime
 
-export LC_ALL="en_US.UTF-8"
-export LANG="en_US.UTF-8"
-export LANGUAGE="en_US.UTF-8"
-export LOCALE="en_US.UTF-8"
+echo "LOCALE=en_US.UTF-8" >> /etc/environment
+echo "LANG=en_US.UTF-8" >> /etc/environment
+echo "LANGUAGE=en_US" >> /etc/environment
+source /etc/environment
 
-#--------------------------------------------------
-# Install PostgreSQL Server
-#--------------------------------------------------
-echo -e "\n---- Install PostgreSQL Server ----"
+touch /etc/default/locale
+echo "LC_CTYPE=\"en_US.UTF-8\"" >> /etc/default/locale
+echo "LC_ALL=\"en_US.UTF-8\"" >> /etc/default/locale
+echo "LANG=\"en_US.UTF-8\"" >> /etc/default/locale
+
+echo "en_US.UTF-8 UTF-8" > /etc/locale.gen
+echo "LANG=en_US.UTF-8" > /etc/locale.conf
+locale-gen "en_US.UTF-8"
+
+echo "alias ls='ls --color'" >> /etc/profile
+echo "alias ll='ls -la'" >> /etc/profile
+
+# PostgreSQL repository
 echo "deb http://apt.postgresql.org/pub/repos/apt buster-pgdg main" > /etc/apt/sources.list.d/pgdg.list
 curl -sL https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add -
+
+# Load the available packages
 apt-get -y update
-apt-get -y install postgresql-${PG_VERSION} postgresql-server-dev-${PG_VERSION}
 
-
-#--------------------------------------------------
-# Install Python and Library Dependencies
-#--------------------------------------------------
-echo -e "\n--- Installing Python and Libraries --"
-apt-get install -y git wget build-essential node-less libjpeg-dev libpq-dev python3-pip python3-dev python3-venv python3-wheel libzip-dev zlib1g-dev libldap2-dev libsasl2-dev libssl-dev 
+apt-get -y install sudo gcc g++ make build-essential libssl-dev libbz2-dev libreadline-dev  libldap2-dev libsasl2-dev \
+                   libsqlite3-dev libmaxminddb0 libmaxminddb-dev libgeoip-dev zlib1g-dev libncurses5-dev \
+                   libjpeg-dev libpq-dev libncursesw5-dev libffi-dev liblzma-dev llvm git iputils-ping net-tools node-less \
+                   postgresql-$PG_VERSION postgresql-server-dev-$PG_VERSION
 
 #--------------------------------------------------
-# Install Node and Dependencies
-#--------------------------------------------------
-#echo -e "\n--- Installing Node and packages --"
-#curl -sL https://deb.nodesource.com/setup_10.x | bash -
-#apt-get -y update
-#apt-get -y install nodejs
-#npm install -g less less-plugin-clean-css
-
-#--------------------------------------------------
-# Install Wkhtmltopdf if needed
+# Install Wkhtmltopdf
 #--------------------------------------------------
 curl -fsSL https://github.com/wkhtmltopdf/packaging/releases/download/0.12.6-1/wkhtmltox_0.12.6-1.buster_amd64.deb > /tmp/wkhtml.deb
 apt-get -y install /tmp/wkhtml.deb
@@ -88,22 +78,25 @@ ln -s /usr/local/bin/wkhtmltoimage /usr/bin
 curl -fsSL  https://github.com/tianon/gosu/releases/download/1.12/gosu-amd64 > /usr/local/bin/gosu
 chmod 755 /usr/local/bin/gosu
 
-
-echo -e "\n---- Create ODOO system user ----"
 mkdir -p $ODOO_HOME/conf
+mkdir -p $ODOO_HOME/extra-addons
 
 groupadd -g $ODOO_UID $ODOO_USER
 useradd --shell=/bin/bash --home=$ODOO_HOME -u $ODOO_UID -g $ODOO_USER $ODOO_USER
 chown -fR $ODOO_USER:$ODOO_USER $ODOO_HOME
 chmod 755 $ODOO_HOME
 
-echo -e "\n---- Create Log directory ----"
 mkdir /var/log/$ODOO_USER
 chown -fR $ODOO_USER:$ODOO_USER /var/log/$ODOO_USER
 chown -fR $ODOO_USER:$ODOO_USER $ODOO_HOME
 chown -fR $ODOO_USER:$ODOO_USER $ODOO_HOME
-chmod 755 /entrypoint.sh
+
+chown $ODOO_USER:$ODOO_USER /docker_entrypoint.sh
+chmod +x /docker_entrypoint.sh
+
+chown $ODOO_USER:$ODOO_USER '/tmp/setup_odoo.sh'
+chmod +x '/tmp/setup_odoo.sh'
+su - $ODOO_USER -c  '/tmp/setup_odoo.sh'
 
 
 exit 0
-
